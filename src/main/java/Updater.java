@@ -112,8 +112,31 @@ public class Updater extends Thread{
      }
 
 
+    /*
+     * run() function contains the loop for processing queue elements
+     * that other peers would add.
+     *
+     * This run() function is in the "Updater.java" file, which defines the
+     * Updater thread class. This means that a new process is forked from the
+     * main process, which runs the code shown below. This code contains
+     * an "infinite" loop, which would live until this child process
+     * get the termination signal.
+     *
+     * Some dark functions as "getValue1", "getValue2" and so on are used here.
+     * These functions get the ordered components from the elements placed in
+     * the PeerData.queue Queue.
+     */
     public void run(){
+        /*
+         * Create a raw IPFS object for the given PeerData path
+         */
         ipfs = new IPFS(PeerData.Path);
+        /*
+         * ipfsClass contains a decorated IPFS object. This class is defined
+         * under the MyIPFSClass.java source file.
+         * Internally, it creates an ipfsObj raw IPFS object as the one
+         * created before, so theoretically, ipfs is a duplicated instance.
+         */
         ipfsClass = new MyIPFSClass(PeerData.Path);
         int partition,iteration;
         boolean from_clients;

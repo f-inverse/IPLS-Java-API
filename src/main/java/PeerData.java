@@ -17,6 +17,11 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 
+/*
+ * This class contains node data. In this case, it is named Peer Data
+ * as we are into a p2p network, which contains peers (nodes), so peer-to-peer
+ * relationship is had.
+ */
 public class PeerData {
     public static Semaphore InitSem = new Semaphore(0);
     public static Semaphore mtx = new Semaphore(1);

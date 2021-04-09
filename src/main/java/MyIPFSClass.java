@@ -15,6 +15,16 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/*
+ * This is a decorated IPFS class, which has been designed in order to
+ * get IPFS to work with Federated Learning.
+ *
+ * For each one of the partitions (which are nothing more than small
+ * areas under the IPFS network) there exist a set of neighbors.
+ *
+ * These neighbors would be used for propagating weights model updates to
+ * the connected peers.
+ */
 public class MyIPFSClass {
     public static IPFS ipfsObj;
 
@@ -23,7 +33,23 @@ public class MyIPFSClass {
     }
     public MyIPFSClass(){}
 
-
+    /*
+     * This function creates an organized folder structure for the current
+     * Peer. This subfolders structure would lie into the
+     * IPLS_directory_[PeerData._ID] folder.
+     *
+     * In this way, the IPFS would contain a IPLS_directory_* folder for
+     * each one of the peers connected to the network.
+     *
+     * The folder structure would contain three files for each one of the
+     * partitions in the network, which are listed below:
+     * 
+     * 1. [Partition#]_Gradients: See update_IPLS_directory function
+     * 2. [Partition#]_Replicas
+     * 3. [Partition#]_Updates
+     *
+     * It also would contain the Auxiliaries and the State files.
+     */
     public static void initialize_IPLS_directory() throws IOException {
         String dirname = "IPLS_directory_" + PeerData._ID;
         boolean rval;
@@ -65,6 +91,33 @@ public class MyIPFSClass {
     }
 
 
+    /*
+     * The current function would be able to update the gradients files
+     * conditionally.
+     *
+     * It receives an state variable, which, taken into account its value
+     * the function behavior is redefined.
+     *
+     * When state equals two, then, we update the gradients for each partition
+     * found in the current IPFS p2p network.
+     *
+     * If state is equal to 2 then add to auxilary_list the number of iterations
+     * of the current PeerData with offsets (0, -1, -1). 
+     * This number is increased by the IPLS.java Update_Client_List() function.
+     * Even more, this value is also modified when synchronizing in the
+     * GetPartitions() function of that same file.
+     * Then, for each partition (small areas of peers in the network),
+     * if the current partition number is not found in the auth_list
+     * then update the corresponding gradients file of that partition.
+     *
+     * If state is equal to 3 then add to auxilary_list the number of iterations
+     * with offsets (0, 0, -1). Now, instead of going through all the partitions,
+     * we go for all the auth_list 
+     *  
+     *
+     *
+     * The comment below seems to be outdated, as state numbers have changed.
+     */
     //Case state == 1, then we write a gradients file
     //Case state == 2, then we write only in the gradients the iteration number
     //Case state == 3, then we write also in the updates the iteration number
