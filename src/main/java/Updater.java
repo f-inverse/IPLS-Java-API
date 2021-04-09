@@ -46,22 +46,80 @@ public class Updater extends Thread{
             //System.out.println("GAMW TO SPITI");
 
             if(PeerData.isSynchronous){
+                /*
+                 * Acquire the semaphore over the current PeerData.mtx.
+                 * This is used for ensuring no racing conditions occurs.
+                 */
                 PeerData.mtx.acquire();
 
-                if((PeerData.Replica_holders.get(Partiton).contains(Origin) && iteration == PeerData.middleware_iteration) || (PeerData.New_Replicas.get(Partiton).contains(Origin) && iteration == PeerData.middleware_iteration)){
+                /*
+                 * Origin refers to the peerId from which the Gradients were
+                 * received.
+                 */
+                if(
+                    /*
+                     * If Replica of the node for the given partition number
+                     * is present and we are at the synchronization iteration.
+                     */
+                    (PeerData.Replica_holders.get(Partiton).contains(Origin) &&
+                     iteration == PeerData.middleware_iteration) || 
+                    /*
+                     * Or the origin peer is present in the new replicas for
+                     * the current partition.
+                     */
+                    (PeerData.New_Replicas.get(Partiton).contains(Origin) && 
+                     iteration == PeerData.middleware_iteration)){
+                    /*
+                     * Use this loop for going one by one through all the
+                     * gradients and modifying the aggregated gradients
+                     * of the peer partition.
+                     */
                     for( i = 0; i < PeerData.Aggregated_Gradients.get(Partiton).size(); i++){
                         PeerData.Aggregated_Gradients.get(Partiton).set(i, PeerData.Aggregated_Gradients.get(Partiton).get(i) + Gradient.get(i));
                     }
+                    /*
+                     * Remove the flag for this iteration
+                     */
                     PeerData.Replica_Wait_Ack.remove(new Triplet<>(Origin,Partiton,iteration));
                 }
-                else if((PeerData.Replica_holders.get(Partiton).contains(Origin) && iteration > PeerData.middleware_iteration) || (PeerData.New_Replicas.get(Partiton).contains(Origin) && iteration > PeerData.middleware_iteration)){
+                else if(
+                    /*
+                     * If the origin peer is in the replica holders of its
+                     * partition and the iteration number is higher than the
+                     * middleware_iteration set for this peer
+                     */
+                    (PeerData.Replica_holders.get(Partiton).contains(Origin) 
+                     && iteration > PeerData.middleware_iteration) || 
+                    /*
+                     * Or it is in the new replicas and the same condition
+                     * is present for the iteration number.
+                     */
+                    (PeerData.New_Replicas.get(Partiton).contains(Origin) && 
+                     iteration > PeerData.middleware_iteration)){
                     // Do something for replica holders only. Aggregate in future buffer
+                    /*
+                     * Add this element to the Replica_Wait_Ack_from_future,
+                     * note that this is not the same as the prior
+                     * Replica_Wait_Ack.
+                     */
                     PeerData.Replica_Wait_Ack_from_future.add(new Triplet<>(Origin,Partiton,iteration));
                 }
 
+                /*
+                 * Free the PeerData.mtx semaphore.
+                 */
                 PeerData.mtx.release();
             }
             else{
+                /*
+                 * In the case where there is no synchronization, then directly
+                 * update the corresponding partition Weights by using
+                 * a formula for weighted averaging.
+                 *
+                 * @todo Check if 0.25 should not go in front of the
+                 * Gradient.get(i) phrase.
+                 * Check the LeavingPeer weighted approach below.
+                 */
                 for (i = 0; i < PeerData.Weights.get(Partiton).size(); i++) {
                     PeerData.Weights.get(Partiton).set(i, 0.75*PeerData.Weights.get(Partiton).get(i) + Gradient.get(i));
                 }
@@ -70,6 +128,14 @@ public class Updater extends Thread{
         }
         //System.out.println(Origin + " , " + Origin==null + " , " + Origin.equals(null));
         //Aggregate weights from a leaving peer
+        /*
+         * If origin is from a leaving peer, then we should not wait for
+         * synchronization for him, directly update the partition weights.
+         *
+         * It could be seen that here there is a weighted averaging process
+         * where a and (1-a) are used as factor. This a value is equal to
+         * 0.6 in the head of the current class definition.
+         */
         else if(Origin.equals("LeavingPeer")){
             for(i = 0; i < PeerData.Weights.get(Partiton).size(); i++){
                 PeerData.Weights.get(Partiton).set(i, a*PeerData.Weights.get(Partiton).get(i) + (1-a)*Gradient.get(i));
@@ -77,28 +143,71 @@ public class Updater extends Thread{
         }
         //Aggregate gradients from other peers requests
         else if(from_clients) {
+            /*
+             * Red light in the PeerData.mtx semaphore.
+             */
             PeerData.mtx.acquire();
           
+            /*
+             * Update the Gradients for the current partition and
+             * conditionally update the weights if no synchronization
+             * is had.
+             */
             for (i = 0; i < PeerData.Weights.get(Partiton).size(); i++) {
                 PeerData.Aggregated_Gradients.get(Partiton).set(i, PeerData.Aggregated_Gradients.get(Partiton).get(i) + Gradient.get(i));
                 if(!PeerData.isSynchronous){
                     PeerData.Weights.get(Partiton).set(i, PeerData.Weights.get(Partiton).get(i) - Gradient.get(i)/weight);
                 }
             }
+            /*
+             * If Origin is not in the set of workers, then just add it
+             * there for the current peer partition.
+             */
             if(!PeerData.workers.get(Partiton).contains(Origin)) {
                 PeerData.workers.get(Partiton).add(Origin);
             }
             if(PeerData.isSynchronous){
                 // In case a node is so fast sto that he sends the new gradients before the other can finish or if there is a new peer then keep the gradients in a buffer
                 // and use them in the next iteration
-                if((!PeerData.Client_Wait_Ack.contains(new Triplet<>(Origin,Partiton,iteration)) && PeerData.Clients.get(Partiton).contains(Origin))||(PeerData.New_Clients.get(Partiton).contains(Origin))){
+                /*
+                 * @todo Check what happens if this behavior happens twice.
+                 * If a node sends three updates before the other can finish.
+                 */
+                if(
+                    /*
+                     * If data for the current synchronization phase is not
+                     * had for the current peer and that peer is in the
+                     * list of clients for the its partition.
+                     */
+                    (!PeerData.Client_Wait_Ack.contains(new Triplet<>(Origin,Partiton,iteration)) && 
+                     PeerData.Clients.get(Partiton).contains(Origin)) ||
+                    /*
+                     * Or that same peer is in the new_clients vector.
+                     */
+                    (PeerData.New_Clients.get(Partiton).contains(Origin))) {
                     System.out.println("RECEIVED GRADIENTS FROM FUTURE ? :^)");
                     //System.out.println(PeerData.Client_Wait_Ack);
                     //System.out.println(new Triplet<>(Origin,Partiton,iteration));
+                    /*
+                     * Add the origin peer to the Client_Wait_Ack_from_future 
+                     * vector.
+                     *
+                     * This is not the same than Replica_Wait_Ack_from_future 
+                     */
                     PeerData.Client_Wait_Ack_from_future.add(new Triplet<>(Origin,Partiton,iteration));
                 }
-                else if(PeerData.Clients.containsKey(Origin) && PeerData.middleware_iteration < iteration){
+                else if(PeerData.Clients.containsKey(Origin) &&
+                    PeerData.middleware_iteration < iteration){
+                    /*
+                     * If the number of iterations is less than the 
+                     * synchronization iterations and the peer is in the list
+                     * of the current node clients.
+                     */
                     System.out.println("RECEIVED GRADIENTS FROM FUTURE ? :^)");
+                    /* 
+                     * Add to Client_Wait_Ack_from_future and remove from the
+                     * Client_Wait_Ack if present.
+                     */
                     PeerData.Client_Wait_Ack_from_future.add(new Triplet<>(Origin,Partiton,iteration));
                     for(int j = 0; j < PeerData.Client_Wait_Ack.size(); j++){
                         if(PeerData.Client_Wait_Ack.contains(new Triplet<>(Origin,Partiton,PeerData.middleware_iteration))){
@@ -108,11 +217,19 @@ public class Updater extends Thread{
                     }
                 }
                 else{
+                    /*
+                     * We are not waiting anymore for the origin peer to send
+                     * data for the current iteration.
+                     */
                     PeerData.Client_Wait_Ack.remove(new Triplet<>(Origin,Partiton,iteration));
                 }
 
 
             }
+            /*
+             * Green light for the PeerData.mtx semaphore.
+             * mtx -> Mutex -> Mutually Exclusive
+             */
             PeerData.mtx.release();
 
         }
@@ -191,7 +308,24 @@ public class Updater extends Thread{
                 if(PeerData.isBootsraper){
                     continue;
                 }
-                if(PeerId != null && PeerId.equals(ipfs.id().get("ID").toString()) == false && !PeerData.isSynchronous) {
+                if(
+                    /*
+                     * If peer id is present
+                     */
+                    PeerId != null && 
+                    /*
+                     * And it is not the same that the current node id
+                     */
+                    PeerId.equals(ipfs.id().get("ID").toString()) == false && 
+                    /*
+                     * And we do not use synchronization.
+                     */
+                    !PeerData.isSynchronous) {
+                    /*
+                     * Publish a message to the PeerId
+                     *
+                     * @todo Replace request.getValue1() by partition
+                     */
                     ipfs.pubsub.pub(PeerId,ipfsClass.Marshall_Packet(PeerData.Weights.get(request.getValue1()),ipfs.id().get("ID").toString(),partition,(short)4));
                 }
                 else if(PeerId != null && !PeerData.isSynchronous){
