@@ -30,6 +30,13 @@ public class Updater extends Thread{
         return  ipfsClass.add_file(filename);
     }
 
+    /*
+     * @todo Change Partiton by partition and use snake case.
+     */
+    /*
+     * This function is invoked when a new Quintet is received from a Peer
+     * and pulled out from the Queue in the main run() infinite loop.
+     */
     public void _Update(List<Double> Gradient,int Partiton,String Origin,int iteration,boolean from_clients) throws InterruptedException {
         int i,counter = 0;
         double weight = PeerData.previous_iter_active_workers.get(Partiton);
@@ -124,7 +131,9 @@ public class Updater extends Thread{
      *
      * Some dark functions as "getValue1", "getValue2" and so on are used here.
      * These functions get the ordered components from the elements placed in
-     * the PeerData.queue Queue.
+     * the PeerData.queue Queue. These are functions for grabbing the elements
+     * of a Quintet element, which is nothing more than a Tuple with
+     * five elements of distinct types.
      */
     public void run(){
         /*
@@ -145,6 +154,15 @@ public class Updater extends Thread{
         Quintet<String,Integer,Integer,Boolean, List<Double>> request;
         Multihash hash;
         try {
+            /*
+             * Infinite loop for the current thread.
+             * 
+             * This loop get elements out of the Queue using a blocking
+             * function for that purpose (.take()).
+             * Then, it extracts each one of the elements of the Quintet
+             * pulled out of the Queue, assigning each one of them to a
+             * variable which was previously allocated.
+             */
             while (true) {
                 request = PeerData.queue.take();
                 partition = request.getValue1();
@@ -152,8 +170,24 @@ public class Updater extends Thread{
                 from_clients = request.getValue3();
                 PeerId = request.getValue0();
                 iteration = request.getValue2();
+                /*
+                 * 
+                 */
                 _Update(Gradient, partition,PeerId,iteration,from_clients);
 
+                /*
+                 * @todo isBootsraper -> isBootstrapper
+                 * That change has to be made at:
+                 * GlobalGradientPool.java
+                 * Model.java
+                 * IPLS.java
+                 * PeerData.java
+                 * Updater.java
+                 */
+                /*
+                 * If the current node is the Bootstrapper, then no more actions
+                 * are performed.
+                 */
                 if(PeerData.isBootsraper){
                     continue;
                 }

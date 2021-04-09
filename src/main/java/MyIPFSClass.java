@@ -112,11 +112,17 @@ public class MyIPFSClass {
      *
      * If state is equal to 3 then add to auxilary_list the number of iterations
      * with offsets (0, 0, -1). Now, instead of going through all the partitions,
-     * we go for all the auth_list 
+     * we go for all the auth_list and update the _Replicas files.
      *  
-     *
+     * If state is equal to 4 then add to auxilary_list the number of iterations
+     * with offsets (0, 0, 0). We go through all the partitions and we
+     * update the _Updates file for each one of them (for the partitions present
+     * at the current Auth_List.
      *
      * The comment below seems to be outdated, as state numbers have changed.
+     */
+    /*
+     * @todo Modify auxilary word by auxiliary, which is more accepted.
      */
     //Case state == 1, then we write a gradients file
     //Case state == 2, then we write only in the gradients the iteration number
@@ -158,7 +164,10 @@ public class MyIPFSClass {
         }
     }
 
-
+    /*
+     * This function invokes the prior annotated function
+     * (update_IPLS_directory).
+     */
     public static void publish_gradients(Map<Integer,List<Double>> Gradients, int state) throws Exception {
         Multihash dir_hash;
         update_IPLS_directory(Gradients,state);
